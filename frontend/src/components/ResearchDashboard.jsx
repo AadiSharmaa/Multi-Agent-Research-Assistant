@@ -2,6 +2,7 @@ import { useState, useRef, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
+import { FileCode2, Loader2, Copy, Check } from 'lucide-react';
 
 /* ═══════════════════════════════════════════════════════════════════════════
    Constants
@@ -206,6 +207,8 @@ export default function ResearchDashboard() {
   const [iterationCount, setIterationCount] = useState(0);
   const [report, setReport] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+  const [exportingDocs, setExportingDocs] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   /* ── SSE stream handler ──────────────────────────────────────────────── */
 
@@ -303,6 +306,44 @@ export default function ResearchDashboard() {
       setErrorMsg(err.message || 'Connection failed');
     }
   }, [query, status]);
+
+  /* ── Export to Google Docs handler ───────────────────────────────────────── */
+
+  const handleExportDocs = useCallback(async () => {
+    if (exportingDocs || !report) return;
+    setExportingDocs(true);
+    try {
+      const res = await fetch('http://localhost:8000/api/export/docs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ summary: report, title: query || 'Research Report' }),
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.detail || `Export failed (${res.status})`);
+      }
+      const data = await res.json();
+      window.open(data.url, '_blank');
+    } catch (err) {
+      console.error('Google Docs export error:', err);
+      alert(`Failed to export to Google Docs: ${err.message}`);
+    } finally {
+      setExportingDocs(false);
+    }
+  }, [exportingDocs, report, query]);
+
+  /* ── Copy to clipboard handler ─────────────────────────────────────────── */
+
+  const handleCopy = useCallback(async () => {
+    if (!report) return;
+    try {
+      await navigator.clipboard.writeText(report);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Copy failed:', err);
+    }
+  }, [report]);
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -457,16 +498,40 @@ export default function ResearchDashboard() {
                 </div>
               </div>
 
-              {/* Copy button */}
-              <button
-                id="copy-report-button"
-                onClick={() => navigator.clipboard.writeText(report)}
-                className="px-4 py-2 text-xs font-medium text-gray-400 bg-white/[0.04]
-                           hover:bg-white/[0.08] rounded-lg border border-white/[0.06]
-                           transition-all hover:text-white"
-              >
-                Copy Markdown
-              </button>
+              {/* Action buttons */}
+              <div className="flex items-center gap-2">
+                <button
+                  id="export-docs-button"
+                  onClick={handleExportDocs}
+                  disabled={exportingDocs}
+                  className="px-4 py-2 text-xs font-medium text-gray-400 bg-white/[0.04]
+                             hover:bg-white/[0.08] rounded-lg border border-white/[0.06]
+                             transition-all hover:text-white disabled:opacity-50 disabled:cursor-not-allowed
+                             flex items-center gap-2"
+                >
+                  {exportingDocs ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <FileCode2 className="w-3.5 h-3.5" />
+                  )}
+                  {exportingDocs ? 'Exporting…' : 'Export to Google Docs'}
+                </button>
+
+                <button
+                  id="copy-report-button"
+                  onClick={handleCopy}
+                  className="px-4 py-2 text-xs font-medium bg-slate-800 hover:bg-slate-700
+                             text-slate-300 rounded-lg border border-white/[0.06]
+                             transition-all hover:text-white flex items-center gap-2"
+                >
+                  {copied ? (
+                    <Check className="w-3.5 h-3.5 text-emerald-400" />
+                  ) : (
+                    <Copy className="w-3.5 h-3.5" />
+                  )}
+                  {copied ? 'Copied!' : 'Copy'}
+                </button>
+              </div>
             </div>
 
             {/* Rendered markdown */}

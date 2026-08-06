@@ -7,13 +7,19 @@ Single endpoint:
 """
 
 import json
+import logging
+import traceback
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 from graph import app as research_app
+from export_service import export_to_docs
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 # ── FastAPI setup ────────────────────────────────────────────────────────────
@@ -36,6 +42,11 @@ app.add_middleware(
 
 class ResearchRequest(BaseModel):
     query: str
+
+
+class ExportRequest(BaseModel):
+    summary: str
+    title: str
 
 
 # ── SSE helpers ──────────────────────────────────────────────────────────────
@@ -113,6 +124,22 @@ async def research(request: ResearchRequest):
             "X-Accel-Buffering": "no",       # disable nginx buffering if proxied
         },
     )
+
+
+# ── Export endpoint ───────────────────────────────────────────────────────────
+
+@app.post("/api/export/docs")
+async def export_docs(request: ExportRequest):
+    """Create a Google Doc from the research summary and return its URL."""
+    try:
+        url = export_to_docs(request.summary, request.title)
+        return {"url": url}
+    except Exception as e:
+        logger.error("Google Docs export failed:\n%s", traceback.format_exc())
+        return JSONResponse(
+            status_code=500,
+            content={"detail": str(e)},
+        )
 
 
 # ── Dev entry point ──────────────────────────────────────────────────────────
