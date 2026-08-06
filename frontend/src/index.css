@@ -1,0 +1,148 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Base resets & dark background ───────────────────────────────────────── */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  @apply bg-surface-500 text-gray-100 font-sans antialiased;
+  min-height: 100vh;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* ── Scrollbar styling ───────────────────────────────────────────────────── */
+
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-surface-400;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-accent-muted rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-accent;
+}
+
+/* ── Markdown rendered content ───────────────────────────────────────────── */
+
+.markdown-body {
+  @apply text-gray-200 leading-relaxed;
+}
+
+.markdown-body h1 {
+  @apply text-3xl font-bold text-white mt-8 mb-4 pb-3 border-b border-white/10;
+}
+
+.markdown-body h2 {
+  @apply text-2xl font-semibold text-white mt-7 mb-3 pb-2 border-b border-white/5;
+}
+
+.markdown-body h3 {
+  @apply text-xl font-semibold text-accent-light mt-5 mb-2;
+}
+
+.markdown-body h4 {
+  @apply text-lg font-medium text-gray-300 mt-4 mb-2;
+}
+
+.markdown-body p {
+  @apply mb-4 text-gray-300;
+}
+
+.markdown-body ul,
+.markdown-body ol {
+  @apply mb-4 pl-6;
+}
+
+.markdown-body ul {
+  @apply list-disc;
+}
+
+.markdown-body ol {
+  @apply list-decimal;
+}
+
+.markdown-body li {
+  @apply mb-1.5 text-gray-300;
+}
+
+.markdown-body a {
+  @apply text-accent-light underline underline-offset-2 hover:text-accent transition-colors;
+}
+
+.markdown-body blockquote {
+  @apply border-l-4 border-accent-muted pl-4 py-1 my-4 bg-white/[0.03] rounded-r-lg italic text-gray-400;
+}
+
+.markdown-body code {
+  @apply bg-white/[0.08] text-accent-light px-1.5 py-0.5 rounded text-sm font-mono;
+}
+
+.markdown-body pre {
+  @apply bg-surface-300 rounded-xl p-5 my-5 overflow-x-auto border border-white/[0.06];
+}
+
+.markdown-body pre code {
+  @apply bg-transparent p-0 text-gray-300 text-sm;
+}
+
+.markdown-body table {
+  @apply w-full my-5 border-collapse;
+}
+
+.markdown-body thead th {
+  @apply text-left text-xs uppercase tracking-wider text-gray-400 pb-3 border-b border-white/10 font-semibold;
+}
+
+.markdown-body tbody td {
+  @apply py-2.5 pr-4 text-gray-300 border-b border-white/[0.04];
+}
+
+.markdown-body tbody tr:hover td {
+  @apply bg-white/[0.02];
+}
+
+.markdown-body hr {
+  @apply my-8 border-white/10;
+}
+
+.markdown-body strong {
+  @apply text-white font-semibold;
+}
+
+.markdown-body img {
+  @apply rounded-xl my-4 max-w-full;
+}
+
+/* ── Highlight.js overrides for code blocks ──────────────────────────────── */
+
+.hljs {
+  @apply bg-transparent !important;
+}
+
+/* ── Shimmer loading bar ─────────────────────────────────────────────────── */
+
+.shimmer-bar {
+  background: linear-gradient(
+    90deg,
+    rgba(124, 92, 252, 0.05) 0%,
+    rgba(124, 92, 252, 0.25) 50%,
+    rgba(124, 92, 252, 0.05) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s linear infinite;
+}
