@@ -100,10 +100,28 @@ def researcher_node(state: ResearchState) -> dict:
     for term in search_terms:
         all_markdown.extend(search_and_scrape(term))
 
+    iteration = state.get("iteration_count", 0) + 1
+
+    # Log the trajectory event for the Researcher
+    trajectory_event = {
+        "step": "researcher",
+        "iteration": iteration,
+        "inputs": {
+            "query": state["query"],
+            "revision_notes": state.get("revision_notes", ""),
+        },
+        "outputs": {
+            "search_queries": search_terms,
+            "docs_retrieved_count": len(all_markdown),
+            "doc_snippets": [doc[:150] + "..." for doc in all_markdown],
+        },
+    }
+
     return {
         "search_queries": search_terms,
         "raw_context": all_markdown,                       # appended via operator.add
-        "iteration_count": state.get("iteration_count", 0) + 1,
+        "iteration_count": iteration,
+        "trajectory": [trajectory_event],
     }
 
 
@@ -141,7 +159,24 @@ def synthesizer_node(state: ResearchState) -> dict:
         HumanMessage(content=user_prompt),
     ])
 
-    return {"draft_summary": response.content}
+    # Log the trajectory event for the Synthesizer
+    trajectory_event = {
+        "step": "synthesizer",
+        "iteration": state.get("iteration_count", 0),
+        "inputs": {
+            "query": state["query"],
+            "context_docs_count": len(state["raw_context"]),
+        },
+        "outputs": {
+            "draft_summary_length": len(response.content),
+            "draft_summary_preview": response.content[:300] + "...",
+        },
+    }
+
+    return {
+        "draft_summary": response.content,
+        "trajectory": [trajectory_event],
+    }
 
 
 # ── Node 3 – Validator ──────────────────────────────────────────────────────
@@ -176,6 +211,23 @@ def validator_node(state: ResearchState) -> dict:
         HumanMessage(content=user_prompt),
     ])
 
+    revision = result.revision_notes if not result.is_valid else ""
+
+    # Log the trajectory event for the Validator
+    trajectory_event = {
+        "step": "validator",
+        "iteration": state.get("iteration_count", 0),
+        "inputs": {
+            "query": state["query"],
+            "draft_summary_length": len(state.get("draft_summary", "")),
+        },
+        "outputs": {
+            "is_valid": result.is_valid,
+            "revision_notes": revision,
+        },
+    }
+
     return {
-        "revision_notes": result.revision_notes if not result.is_valid else "",
+        "revision_notes": revision,
+        "trajectory": [trajectory_event],
     }

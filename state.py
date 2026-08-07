@@ -6,7 +6,7 @@ via operator.add on raw_context and tracking loop iterations.
 """
 
 import operator
-from typing import Annotated, TypedDict
+from typing import Annotated, Any, TypedDict
 
 
 class ResearchState(TypedDict):
@@ -29,3 +29,6 @@ class ResearchState(TypedDict):
 
     # Counter to cap routing loops and prevent runaway iterations
     iteration_count: int
+
+    # Audit log for trajectory evaluation (appended by each node)
+    trajectory: Annotated[list[dict[str, Any]], operator.add]

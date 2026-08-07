@@ -1,9 +1,9 @@
 """
 FastAPI server that exposes the LangGraph research pipeline over SSE.
 
-Single endpoint:
-    POST /api/research  { "query": "..." }
-    → Server-Sent Events stream with per-node progress + final report
+Endpoints:
+    POST /api/research   { "query": "..." }  → SSE stream with progress + report
+    GET  /api/evaluate                        → trajectory evaluation of last run
 """
 
 import json
@@ -22,6 +22,7 @@ from slowapi.errors import RateLimitExceeded
 
 from graph import app as research_app
 from export_service import export_to_docs
+from evaluator import evaluate_trajectory
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -48,6 +49,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# In-memory store for the last completed research session
+_last_session: dict = {}
 
 
 # ── Request schema ───────────────────────────────────────────────────────────
@@ -91,10 +96,11 @@ async def research(request: Request, body: ResearchRequest):
             "draft_summary": "",
             "revision_notes": "",
             "iteration_count": 0,
+            "trajectory": [],
         }
 
-
         final_summary = ""
+        accumulated_trajectory: list[dict] = []
 
         # stream_mode="updates" yields {node_name: state_delta} per step
         async for event in research_app.astream(
@@ -106,13 +112,17 @@ async def research(request: Request, body: ResearchRequest):
                 if "draft_summary" in node_output:
                     final_summary = node_output["draft_summary"]
 
-                # Build a slim payload (skip raw_context to keep events small)
+                # Accumulate trajectory events for post-run evaluation
+                if "trajectory" in node_output:
+                    accumulated_trajectory.extend(node_output["trajectory"])
+
+                # Build a slim payload (skip raw_context & trajectory to keep events small)
                 payload = {
                     "node": node_name,
                     "data": {
                         k: v
                         for k, v in node_output.items()
-                        if k != "raw_context"
+                        if k not in ("raw_context", "trajectory")
                     },
                 }
 
@@ -123,6 +133,13 @@ async def research(request: Request, body: ResearchRequest):
                     )
 
                 yield _sse_event(payload)
+
+        # Store the completed session for trajectory evaluation
+        _last_session.update({
+            "query": body.query,
+            "final_summary": final_summary,
+            "trajectory": accumulated_trajectory,
+        })
 
         # Final event with the completed report
         yield _sse_event({
@@ -138,6 +155,36 @@ async def research(request: Request, body: ResearchRequest):
             "X-Accel-Buffering": "no",       # disable nginx buffering if proxied
         },
     )
+
+
+# ── Evaluate endpoint ────────────────────────────────────────────────────────
+
+@app.get("/api/evaluate")
+async def evaluate_last_run():
+    """Run the trajectory evaluator on the last completed research session.
+
+    Returns a structured JSON report with scores for tool correctness,
+    synthesis faithfulness, step efficiency, and root-cause failure analysis.
+    """
+    if not _last_session:
+        return JSONResponse(
+            status_code=404,
+            content={"detail": "No completed research session to evaluate. Run /api/research first."},
+        )
+
+    try:
+        result = evaluate_trajectory(
+            trajectory=_last_session["trajectory"],
+            final_report=_last_session["final_summary"],
+            original_query=_last_session["query"],
+        )
+        return result.model_dump()
+    except Exception as e:
+        logger.error("Trajectory evaluation failed:\n%s", traceback.format_exc())
+        return JSONResponse(
+            status_code=500,
+            content={"detail": str(e)},
+        )
 
 
 # ── Export endpoint ───────────────────────────────────────────────────────────
