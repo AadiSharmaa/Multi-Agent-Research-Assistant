@@ -10,10 +10,15 @@ import json
 import logging
 import traceback
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
+
+# --- Rate-limiting (Denial-of-Wallet protection) ---
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 from graph import app as research_app
 from export_service import export_to_docs
@@ -22,12 +27,19 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-# ── FastAPI setup ────────────────────────────────────────────────────────────
+# ── FastAPI & Limiter setup ──────────────────────────────────────────────────
+
+# Initialize the rate limiter based on the user's IP address
+limiter = Limiter(key_func=get_remote_address)
 
 app = FastAPI(
     title="Multi-Agent Research Assistant",
     version="0.1.0",
 )
+
+# Attach the limiter to the FastAPI app instance
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
@@ -59,7 +71,8 @@ def _sse_event(payload: dict) -> str:
 # ── Endpoint ─────────────────────────────────────────────────────────────────
 
 @app.post("/api/research")
-async def research(request: ResearchRequest):
+@limiter.limit("5/minute")  # Max 5 requests per minute per IP
+async def research(request: Request, body: ResearchRequest):
     """Stream research progress via Server-Sent Events.
 
     Each SSE payload contains:
@@ -72,13 +85,14 @@ async def research(request: ResearchRequest):
 
     async def event_stream():
         initial_state = {
-            "query": request.query,
+            "query": body.query,
             "search_queries": [],
             "raw_context": [],
             "draft_summary": "",
             "revision_notes": "",
             "iteration_count": 0,
         }
+
 
         final_summary = ""
 

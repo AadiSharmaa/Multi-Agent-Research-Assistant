@@ -3,13 +3,15 @@ Google Docs export service.
 
 Uses OAuth 2.0 user credentials (client_secrets.json) to create a new
 Google Doc by uploading HTML content via the Drive API.  The first run
-opens a browser window for consent; the token is then cached in token.json.
+opens a browser window for consent; the token is then cached in a secure
+hidden folder outside the project workspace.
 """
 
 import io
 import logging
 import os
 import re
+import stat
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -21,7 +23,11 @@ logger = logging.getLogger(__name__)
 
 SCOPES = ["https://www.googleapis.com/auth/drive.file"]
 CLIENT_SECRETS_FILE = "client_secrets.json"
-TOKEN_FILE = "token.json"
+
+# Store the token in a hidden folder in the user's home directory
+SECURE_DIR = os.path.expanduser("~/.research_assistant_keys")
+os.makedirs(SECURE_DIR, exist_ok=True)
+TOKEN_FILE = os.path.join(SECURE_DIR, "token.json")
 
 
 def _get_credentials() -> Credentials:
@@ -47,7 +53,11 @@ def _get_credentials() -> Credentials:
         # Cache for next time
         with open(TOKEN_FILE, "w") as f:
             f.write(creds.to_json())
-        logger.info("Token saved to %s", TOKEN_FILE)
+
+        # Restrict file permissions: owner read/write only (chmod 600)
+        os.chmod(TOKEN_FILE, stat.S_IRUSR | stat.S_IWUSR)
+
+        logger.info("Token securely saved to %s", TOKEN_FILE)
 
     return creds
 
